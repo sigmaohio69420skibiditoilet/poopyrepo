@@ -734,6 +734,14 @@ local Library do
                 local old = own[pre .. "Cur"]
                 own[pre .. "Cur"] = tg
 
+                if old and old ~= tg and old.Btn then
+                    old:Btn(false)
+                end
+
+                if tg and tg ~= old and tg.Btn then
+                    tg:Btn(true)
+                end
+
                 if old and old ~= tg and old.Active then
                     old:Turn(false)
                     task.wait((old.TD or 0.25) + 0.05)
@@ -2375,8 +2383,8 @@ local Library do
 
                 gp = (gp + (dt or 0.016) * 0.5) % 1
 
-                for i = 0, 24 do
-                    local x = i / 24
+                for i = 0, 18 do
+                    local x = i / 18
                     local u = (x * 2 - gp) % 1
                     local t = math.abs(u * 2 - 1)
                     local w = t * t * (3 - 2 * t)
@@ -2691,8 +2699,26 @@ local Library do
             end
         end
 
+        function Page:Btn(Bool)
+            if Bool then
+                Items["Text"].Instance.TextColor3 = Library.Theme.Accent
+                Items["Text"].Instance.TextTransparency = 0
+                Items["Hide"].Instance.Visible = true
+
+                Items["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
+            else
+                Items["Text"].Instance.TextColor3 = Library.Theme.Text
+                Items["Text"].Instance.TextTransparency = 0.5
+                Items["Hide"].Instance.Visible = false
+
+                Items["Text"]:ChangeItemTheme({TextColor3 = "Text"})
+            end
+        end
+
         function Page:Turn(Bool)
             Page.Active = Bool
+
+            Page:Btn(Bool)
 
             local grp = Items["Page"].Instance
             local dur = Library.Tween.Time or Page.Window.FadeSpeed or 0.25
@@ -2705,18 +2731,8 @@ local Library do
                 grp.Visible = true
                 grp.GroupTransparency = 1
                 Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-
-                Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
-                Items["Hide"].Instance.Visible = true
-
-                Items["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
             else
                 Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
-
-                Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.5})
-                Items["Hide"].Instance.Visible = false
-
-                Items["Text"]:ChangeItemTheme({TextColor3 = "Text"})
 
                 task.delay(dur + 0.05, function()
                     if not Page.Active then
@@ -2922,8 +2938,30 @@ local Library do
             end
         end
 
+        function SubPage:Btn(Bool)
+            if Bool then
+                Items["Icon"].Instance.ImageColor3 = Library.Theme.Accent
+                Items["Icon"].Instance.ImageTransparency = 0
+                Items["Hide"].Instance.Visible = true
+
+                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Accent"})
+
+                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, 1)
+            else
+                Items["Icon"].Instance.ImageColor3 = Library.Theme.Text
+                Items["Icon"].Instance.ImageTransparency = 0.35
+                Items["Hide"].Instance.Visible = false
+
+                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Text"})
+
+                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, -2)
+            end
+        end
+
         function SubPage:Turn(Bool)
             SubPage.Active = Bool
+
+            SubPage:Btn(Bool)
 
             local grp = Items["Subtab"].Instance
             local dur = Library.Tween.Time or SubPage.Window.FadeSpeed or 0.25
@@ -2936,22 +2974,8 @@ local Library do
                 grp.Visible = true
                 grp.GroupTransparency = 1
                 SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-
-                Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent, ImageTransparency = 0})
-                Items["Hide"].Instance.Visible = true
-
-                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Accent"})
-
-                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, 1)
             else
                 SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
-
-                Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Text, ImageTransparency = 0.35})
-                Items["Hide"].Instance.Visible = false
-
-                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Text"})
-
-                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, -2)
 
                 task.delay(dur + 0.05, function()
                     if not SubPage.Active then
@@ -3277,8 +3301,22 @@ local Library do
                 }) 
             end
 
+            function NewSection:Btn(Bool)
+                if Bool then
+                    SubItems["Text"].Instance.TextColor3 = Library.Theme.Accent
+                    SubItems["Text"].Instance.TextTransparency = 0
+                    SubItems["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
+                else
+                    SubItems["Text"].Instance.TextColor3 = Library.Theme.Text
+                    SubItems["Text"].Instance.TextTransparency = 0.5
+                    SubItems["Text"]:ChangeItemTheme({TextColor3 = "Text"})
+                end
+            end
+
             function NewSection:Turn(Bool)
                 NewSection.Active = Bool
+
+                NewSection:Btn(Bool)
 
                 local grp = SubItems["Content"].Instance
                 local dur = Library.Tween.Time or MultiSection.Window.FadeSpeed or 0.25
@@ -3291,14 +3329,8 @@ local Library do
                     grp.Visible = true
                     grp.GroupTransparency = 1
                     NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-
-                    SubItems["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
-                    SubItems["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
                 else
                     NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
-
-                    SubItems["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.5})
-                    SubItems["Text"]:ChangeItemTheme({TextColor3 = "Text"})
 
                     task.delay(dur + 0.05, function()
                         if not NewSection.Active then
