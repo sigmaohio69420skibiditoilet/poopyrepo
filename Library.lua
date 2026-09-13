@@ -714,6 +714,50 @@ local Library do
         return NewTween
     end
 
+    Library.Goto = function(self, own, pre, obj)
+        if own[pre .. "Cur"] == obj then
+            return
+        end
+
+        own[pre .. "Q"] = obj
+
+        if own[pre .. "B"] then
+            return
+        end
+
+        own[pre .. "B"] = true
+
+        task.spawn(function()
+            while true do
+                local tg = own[pre .. "Q"]
+                own[pre .. "Q"] = nil
+                local old = own[pre .. "Cur"]
+                own[pre .. "Cur"] = tg
+
+                if old and old ~= tg and old.Active then
+                    old:Turn(false)
+                    task.wait((old.TD or 0.25) + 0.05)
+                end
+
+                if tg ~= old then
+                    if own[pre .. "Q"] and own[pre .. "Q"] ~= tg then
+                        tg = nil
+                    end
+
+                    if tg then
+                        tg:Turn(true)
+                    end
+                end
+
+                if not own[pre .. "Q"] then
+                    break
+                end
+            end
+
+            own[pre .. "B"] = false
+        end)
+    end
+
     Library.Unload = function(self)
         for Index, Value in self.Connections do 
             Value.Connection:Disconnect()
@@ -2311,23 +2355,33 @@ local Library do
                 BackgroundColor3 = FromRGB(255, 255, 255)
             })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
-            local tg1 = FromRGB(215, 215, 215)
-            local tg2 = FromRGB(235, 157, 255)
-            local tgr = Instances:Create("UIGradient", {
+            local g1 = FromRGB(215, 215, 215)
+            local g2 = FromRGB(235, 157, 255)
+            local gw = Instances:Create("UIGradient", {
                 Parent = Items["Title"].Instance,
-                Color = RGBSequence{RGBSequenceKeypoint(0, tg1), RGBSequenceKeypoint(0.5, tg2), RGBSequenceKeypoint(1, tg1)}
+                Color = RGBSequence{RGBSequenceKeypoint(0, g1), RGBSequenceKeypoint(0.5, g2), RGBSequenceKeypoint(1, g1)}
             })
-            local rs = game:GetService("RunService")
-            Library:Connect(rs.RenderStepped, function()
+            local gk = { }
+            local gp = 0
+            Library:Connect(game:GetService("RunService").RenderStepped, function(dt)
+                if not Items["MainFrame"].Instance.Visible then
+                    return
+                end
+
                 local f1 = Library.Flags["Text Gradient 1"]
                 local f2 = Library.Flags["Text Gradient 2"]
-                local c1 = (f1 and f1.Color) or tg1
-                local c2 = (f2 and f2.Color) or tg2
-                if c1 ~= tg1 or c2 ~= tg2 then
-                    tg1, tg2 = c1, c2
-                    tgr.Instance.Color = RGBSequence{RGBSequenceKeypoint(0, c1), RGBSequenceKeypoint(0.5, c2), RGBSequenceKeypoint(1, c1)}
+                local a = (f1 and f1.Color) or g1
+                local b = (f2 and f2.Color) or g2
+
+                gp = (gp + (dt or 0.016) * 0.4) % 1
+
+                for i = 0, 12 do
+                    local x = i / 12
+                    local w = 0.5 - 0.5 * math.cos(6.28318530 * (x * 2 - gp))
+                    gk[i + 1] = RGBSequenceKeypoint(x, a:Lerp(b, w))
                 end
-                tgr.Instance.Offset = Vector2New(0.25 - 0.25 * math.cos(os.clock() * 1.6), 0)
+
+                gw.Instance.Color = RGBSequence(gk)
             end)
 
             Instances:Create("UIStroke", {
@@ -2547,7 +2601,7 @@ local Library do
                 Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(108, 108, 108))}
             })            
 
-            Items["Page"] = Instances:Create("Frame", {
+            Items["Page"] = Instances:Create("CanvasGroup", {
                 Parent = Page.Window.Elements["Content"].Instance,
                 BackgroundTransparency = 1,
                 Name = "\0",
@@ -2634,65 +2688,58 @@ local Library do
             end
         end
 
-        local Debounce = false
-
         function Page:Turn(Bool)
-            if Debounce then 
-                return 
-            end
-
             Page.Active = Bool
 
-            Debounce = true 
+            local grp = Items["Page"].Instance
+            local dur = Library.Tween.Time or Page.Window.FadeSpeed or 0.25
 
-            if Bool then 
-                Items["Page"].Instance.Visible = true
+            if Page.Twn and Page.Twn.Tween then
+                Page.Twn.Tween:Cancel()
+            end
+
+            if Bool then
+                grp.Visible = true
+                grp.GroupTransparency = 1
+                Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
 
                 Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
                 Items["Hide"].Instance.Visible = true
 
                 Items["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
             else
+                Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+
                 Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.5})
                 Items["Hide"].Instance.Visible = false
 
                 Items["Text"]:ChangeItemTheme({TextColor3 = "Text"})
-            end
 
-            local Descendants = Items["Page"].Instance:GetDescendants()
-            TableInsert(Descendants, Items["Page"].Instance)
-
-            local NewTween
-            for Index, Value in Descendants do 
-                local ValueIndex = Library:GetTransparencyPropertyFromItem(Value)
-
-                if not ValueIndex then 
-                    continue
-                end
-
-                if type(ValueIndex) == "table" then
-                    for _, Property in ValueIndex do 
-                        NewTween = Library:FadeItem(Value, Property, Bool, Page.Window.FadeSpeed or 0.5)
+                task.delay(dur + 0.05, function()
+                    if not Page.Active then
+                        grp.Visible = false
+                        grp.GroupTransparency = 0
                     end
-                else
-                    NewTween = Library:FadeItem(Value, ValueIndex, Bool, Page.Window.FadeSpeed or 0.5)
-                end
+                end)
             end
 
-            Library:Connect(NewTween.Tween.Completed, function()
-                Debounce = false
-                Items["Page"].Instance.Visible = Bool
-            end)
+            Page.TD = dur
+
+            if Bool and Page.HasSubtabs and Page.SPs and #Page.SPs > 0 then
+                local cur = Page.Window.SCur
+                if not cur or cur.Page ~= Page then
+                    Library:Goto(Page.Window, "S", Page.SPs[1])
+                end
+            end
         end
 
         Items["Inactive"]:Connect("MouseButton1Down", function()
-            for Index, Value in Page.Window.Pages do
-                Value:Turn(Value == Page)
-            end
+            Library:Goto(Page.Window, "P", Page)
         end)
 
-        if #Page.Window.Pages == 0 then 
+        if #Page.Window.Pages == 0 then
             Page:Turn(true)
+            Page.Window.PCur = Page
         end
 
         if (Page.Name):lower() == "settings" and not Page.HasSubtabs and not Library.TGD then
@@ -2803,9 +2850,10 @@ local Library do
                 Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(138, 138, 138))}
             }) 
 
-            Items["Subtab"] = Instances:Create("Frame", {
+            Items["Subtab"] = Instances:Create("CanvasGroup", {
                 Parent = SubPage.Page.Elements["Columns"].Instance,
                 BackgroundTransparency = 1,
+                Visible = false,
                 Name = "\0",
                 BorderColor3 = FromRGB(0, 0, 0),
                 Size = UDim2New(1, 0, 1, 0),
@@ -2869,19 +2917,20 @@ local Library do
             end
         end
 
-        local Debounce = false
-
         function SubPage:Turn(Bool)
-            if Debounce then 
-                return 
-            end
-
             SubPage.Active = Bool
 
-            Debounce = true 
+            local grp = Items["Subtab"].Instance
+            local dur = Library.Tween.Time or SubPage.Window.FadeSpeed or 0.25
 
-            if Bool then 
-                Items["Subtab"].Instance.Visible = true
+            if SubPage.Twn and SubPage.Twn.Tween then
+                SubPage.Twn.Tween:Cancel()
+            end
+
+            if Bool then
+                grp.Visible = true
+                grp.GroupTransparency = 1
+                SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
 
                 Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent, ImageTransparency = 0})
                 Items["Hide"].Instance.Visible = true
@@ -2890,51 +2939,39 @@ local Library do
 
                 Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, 1)
             else
+                SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+
                 Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Text, ImageTransparency = 0.35})
                 Items["Hide"].Instance.Visible = false
 
                 Items["Icon"]:ChangeItemTheme({ImageColor3 = "Text"})
+
                 Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, -2)
-            end
 
-            local Descendants = Items["Subtab"].Instance:GetDescendants()
-            TableInsert(Descendants, Items["Subtab"].Instance)
-
-            local NewTween
-            for Index, Value in Descendants do 
-                local ValueIndex = Library:GetTransparencyPropertyFromItem(Value)
-
-                if not ValueIndex then 
-                    continue
-                end
-
-                if type(ValueIndex) == "table" then
-                    for _, Property in ValueIndex do 
-                        NewTween = Library:FadeItem(Value, Property, Bool, SubPage.Window.FadeSpeed or 0.5)
+                task.delay(dur + 0.05, function()
+                    if not SubPage.Active then
+                        grp.Visible = false
+                        grp.GroupTransparency = 0
                     end
-                else
-                    NewTween = Library:FadeItem(Value, ValueIndex, Bool, SubPage.Window.FadeSpeed or 0.5)
-                end
+                end)
             end
 
-            Library:Connect(NewTween.Tween.Completed, function()
-                Debounce = false
-                Items["Subtab"].Instance.Visible = Bool
-            end)
+            SubPage.TD = dur
         end
 
         Items["Inactive"]:Connect("MouseButton1Down", function()
-            for Index, Value in SubPage.Window.SubPages do
-                Value:Turn(Value == SubPage)
-            end
+            Library:Goto(SubPage.Window, "S", SubPage)
         end)
 
-        if #SubPage.Window.SubPages == 0 then 
+        if #SubPage.Window.SubPages == 0 then
             SubPage:Turn(true)
+            SubPage.Window.SCur = SubPage
         end
 
         SubPage.Elements = Items
 
+        SubPage.Page.SPs = SubPage.Page.SPs or { }
+        TableInsert(SubPage.Page.SPs, SubPage)
         TableInsert(SubPage.Window.SubPages, SubPage)
         return setmetatable(SubPage, Library.Pages)
     end
@@ -3217,7 +3254,7 @@ local Library do
                     Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(108, 108, 108))}
                 }) 
 
-                SubItems["Content"] = Instances:Create("Frame", {
+                SubItems["Content"] = Instances:Create("CanvasGroup", {
                     Parent = Items["Content"].Instance,
                     BackgroundTransparency = 1,
                     Name = "\0",
@@ -3235,63 +3272,47 @@ local Library do
                 }) 
             end
 
-            local Debounce = false
-
             function NewSection:Turn(Bool)
-                if Debounce then 
-                    return 
-                end
-
                 NewSection.Active = Bool
 
-                Debounce = true 
+                local grp = SubItems["Content"].Instance
+                local dur = Library.Tween.Time or MultiSection.Window.FadeSpeed or 0.25
 
-                if Bool then 
-                    SubItems["Content"].Instance.Visible = true
+                if NewSection.Twn and NewSection.Twn.Tween then
+                    NewSection.Twn.Tween:Cancel()
+                end
+
+                if Bool then
+                    grp.Visible = true
+                    grp.GroupTransparency = 1
+                    NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
 
                     SubItems["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
-
                     SubItems["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
                 else
+                    NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+
                     SubItems["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.5})
-
                     SubItems["Text"]:ChangeItemTheme({TextColor3 = "Text"})
-                end
 
-                local Descendants = SubItems["Content"].Instance:GetDescendants()
-                TableInsert(Descendants, SubItems["Content"].Instance)
-
-                local NewTween
-                for Index, Value in Descendants do 
-                    local ValueIndex = Library:GetTransparencyPropertyFromItem(Value)
-
-                    if not ValueIndex then 
-                        continue
-                    end
-
-                    if type(ValueIndex) == "table" then
-                        for _, Property in ValueIndex do 
-                            NewTween = Library:FadeItem(Value, Property, Bool, MultiSection.Window.FadeSpeed or 0.5)
+                    task.delay(dur + 0.05, function()
+                        if not NewSection.Active then
+                            grp.Visible = false
+                            grp.GroupTransparency = 0
                         end
-                    else
-                        NewTween = Library:FadeItem(Value, ValueIndex, Bool, MultiSection.Window.FadeSpeed or 0.5)
-                    end
+                    end)
                 end
 
-                Library:Connect(NewTween.Tween.Completed, function()
-                    Debounce = false
-                    SubItems["Content"].Instance.Visible = Bool
-                end)
+                NewSection.TD = dur
             end
 
             SubItems["Inactive"]:Connect("MouseButton1Down", function()
-                for Index, Value in MultiSection.SectionContents do
-                    Value:Turn(Value == NewSection)
-                end
+                Library:Goto(MultiSection, "M", NewSection)
             end)
 
-            if #MultiSection.SectionContents == 0 then 
+            if #MultiSection.SectionContents == 0 then
                 NewSection:Turn(true)
+                MultiSection.MCur = NewSection
             end
 
             NewSection.Elements = SubItems
@@ -3299,7 +3320,6 @@ local Library do
             MultiSection.SectionContents[#MultiSection.SectionContents+1] = setmetatable(NewSection, Library.Sections)
         end
 
-        MultiSection.SectionContents[1]:Turn(true)
         MultiSection.Window.Sections[#MultiSection.Window.Sections+1] = MultiSection
         return TableUnpack(MultiSection.SectionContents)
     end
