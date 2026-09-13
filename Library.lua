@@ -214,6 +214,8 @@ local Library do
             Direction = Enum.EasingDirection.Out
         },
 
+        MenuSpeed = 0.3,
+
         Folders = {
             Directory = "scriptname",
             Configs = "scriptname/Configs",
@@ -744,7 +746,6 @@ local Library do
 
                 if old and old ~= tg and old.Active then
                     old:Turn(false)
-                    task.wait((old.TD or 0.25) + 0.05)
                 end
 
                 if tg ~= old then
@@ -2323,7 +2324,7 @@ local Library do
         }
 
         local Items = { } do 
-            Items["MainFrame"] = Instances:Create("Frame", {
+            Items["MainFrame"] = Instances:Create("CanvasGroup", {
                 Parent = Library.Holder.Instance,
                 AnchorPoint = Vector2New(0, 0),
                 Name = "\0",
@@ -2331,7 +2332,8 @@ local Library do
                 BorderColor3 = FromRGB(10, 10, 10),
                 Size = Window.Size,
                 BorderSizePixel = 2,
-                BackgroundColor3 = FromRGB(15, 15, 20)
+                BackgroundColor3 = FromRGB(15, 15, 20),
+                GroupTransparency = 0
             })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background", BorderColor3 = "Border"})
 
             Items["MainFrame"].Instance.Position = UDim2New(0, Camera.ViewportSize.X / 4, 0, Camera.ViewportSize.Y / 4)
@@ -2468,38 +2470,39 @@ local Library do
 
             Debounce = true 
 
+            local mf = Items["MainFrame"].Instance
+
             if Bool then 
-                Items["MainFrame"].Instance.Visible = true
+                mf.Visible = true
+                mf.GroupTransparency = 1
             end
 
-            local Descendants = Items["MainFrame"].Instance:GetDescendants()
-            TableInsert(Descendants, Items["MainFrame"].Instance)
-
-            local NewTween
-            for Index, Value in Descendants do 
-                local ValueIndex = Library:GetTransparencyPropertyFromItem(Value)
-
-                if not ValueIndex then 
-                    continue
-                end
-
-                if type(ValueIndex) == "table" then
-                    for _, Property in ValueIndex do 
-                        NewTween = Library:FadeItem(Value, Property, Bool, Window.FadeSpeed)
-                    end
-                else
-                    NewTween = Library:FadeItem(Value, ValueIndex, Bool, Window.FadeSpeed)
-                end
+            if Window.Twn and Window.Twn.Tween then
+                Window.Twn.Tween:Cancel()
             end
 
-            Library:Connect(NewTween.Tween.Completed, function()
+            local dur = Library.MenuSpeed or Window.FadeSpeed or 0.25
+
+            Window.Twn = Tween:Create(mf, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = Bool and 0 or 1}, true)
+
+            task.delay(dur + 0.05, function()
+                if Window.IsOpen ~= Bool then
+                    return
+                end
+
                 Debounce = false
-                Items["MainFrame"].Instance.Visible = Bool
+
+                if not Bool then
+                    mf.Visible = false
+                    mf.GroupTransparency = 0
+                end
             end)
         end
 
         Library:Connect(UserInputService.InputBegan, function(Input)
-            if tostring(Input.KeyCode) == Library.MenuKeybind or tostring(Input.UserInputType) == Library.MenuKeybind then
+            local mk = tostring(Library.MenuKeybind)
+
+            if tostring(Input.KeyCode) == mk or tostring(Input.UserInputType) == mk then
                 Window:SetOpen(not Window.IsOpen)
             end
         end)
