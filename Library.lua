@@ -544,18 +544,18 @@ local Library do
             local ResizeMax = Gui.Parent.AbsoluteSize - Gui.AbsoluteSize
 
             local ResizeButton = Instances:Create("TextButton", {
-				Parent = Gui,
-				AnchorPoint = Vector2New(1, 1),
-				BorderColor3 = FromRGB(0, 0, 0),
-				Size = UDim2New(0, 8, 0, 8),
-				Position = UDim2New(1, 0, 1, 0),
+                                Parent = Gui,
+                                AnchorPoint = Vector2New(1, 1),
+                                BorderColor3 = FromRGB(0, 0, 0),
+                                Size = UDim2New(0, 8, 0, 8),
+                                Position = UDim2New(1, 0, 1, 0),
                 Name = "\0",
-				BorderSizePixel = 0,
-				BackgroundTransparency = 1,
-				AutoButtonColor = false,
+                                BorderSizePixel = 0,
+                                BackgroundTransparency = 1,
+                                AutoButtonColor = false,
                 Visible = true,
                 Text = ""
-			})
+                        })
 
             ResizeButton:Connect("InputBegan", function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
@@ -573,12 +573,12 @@ local Library do
 
             Library:Connect(UserInputService.InputChanged, function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseMovement and Resizing then
-					ResizeMax = Maximum or Gui.Parent.AbsoluteSize - Gui.AbsoluteSize
+                                        ResizeMax = Maximum or Gui.Parent.AbsoluteSize - Gui.AbsoluteSize
 
-					Delta = Start + UDim2New(0, Input.Position.X, 0, Input.Position.Y)
-					Delta = UDim2New(0, math.clamp(Delta.X.Offset, Minimum.X, ResizeMax.X), 0, math.clamp(Delta.Y.Offset, Minimum.Y, ResizeMax.Y))
+                                        Delta = Start + UDim2New(0, Input.Position.X, 0, Input.Position.Y)
+                                        Delta = UDim2New(0, math.clamp(Delta.X.Offset, Minimum.X, ResizeMax.X), 0, math.clamp(Delta.Y.Offset, Minimum.Y, ResizeMax.Y))
 
-					Tween:Create(Gui, TweenInfo.new(0.17, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = Delta}, true)
+                                        Tween:Create(Gui, TweenInfo.new(0.17, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = Delta}, true)
                 end
             end)
 
@@ -2342,7 +2342,7 @@ local Library do
             Items["Title"] = Instances:Create("TextLabel", {
                 Parent = Items["MainFrame"].Instance,
                 FontFace = Library.Font,
-                TextColor3 = FromRGB(215, 215, 215),
+                TextColor3 = FromRGB(255, 255, 255),
                 BorderColor3 = FromRGB(0, 0, 0),
                 Text = Window.Name,
                 Name = "\0",
@@ -2353,10 +2353,10 @@ local Library do
                 BorderSizePixel = 0,
                 TextSize = 12,
                 BackgroundColor3 = FromRGB(255, 255, 255)
-            })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+            })
 
-            local g1 = FromRGB(215, 215, 215)
-            local g2 = FromRGB(235, 157, 255)
+            local g1 = FromRGB(0, 234, 255)
+            local g2 = FromRGB(255, 47, 185)
             local gw = Instances:Create("UIGradient", {
                 Parent = Items["Title"].Instance,
                 Color = RGBSequence{RGBSequenceKeypoint(0, g1), RGBSequenceKeypoint(0.5, g2), RGBSequenceKeypoint(1, g1)}
@@ -2373,11 +2373,14 @@ local Library do
                 local a = (f1 and f1.Color) or g1
                 local b = (f2 and f2.Color) or g2
 
-                gp = (gp + (dt or 0.016) * 0.4) % 1
+                gp = (gp + (dt or 0.016) * 0.5) % 1
 
-                for i = 0, 12 do
-                    local x = i / 12
-                    local w = 0.5 - 0.5 * math.cos(6.28318530 * (x * 2 - gp))
+                for i = 0, 24 do
+                    local x = i / 24
+                    local u = (x * 2 - gp) % 1
+                    local t = math.abs(u * 2 - 1)
+                    local w = t * t * (3 - 2 * t)
+                    w = w * w * (3 - 2 * w)
                     gk[i + 1] = RGBSequenceKeypoint(x, a:Lerp(b, w))
                 end
 
@@ -2742,17 +2745,19 @@ local Library do
             Page.Window.PCur = Page
         end
 
-        if (Page.Name):lower() == "settings" and not Page.HasSubtabs and not Library.TGD then
-            Library.TGD = true
-            local gs = Page:Section({Name = "Text", Side = 1})
-            gs:Label({Name = "Text Gradient 1", Alignment = "Left"}):Colorpicker({Name = "Text Gradient 1", Flag = "Text Gradient 1", Default = FromRGB(215, 215, 215)})
-            gs:Label({Name = "Text Gradient 2", Alignment = "Left"}):Colorpicker({Name = "Text Gradient 2", Flag = "Text Gradient 2", Default = FromRGB(235, 157, 255)})
-        end
-
         Page.Elements = Items
 
         TableInsert(Page.Window.Pages, Page)
-        return setmetatable(Page, Library.Pages)
+        setmetatable(Page, Library.Pages)
+
+        if (Page.Name):lower() == "settings" and not Page.HasSubtabs and not Library.TGD then
+            Library.TGD = true
+            local gs = Page:Section({Name = "Text", Side = 1})
+            gs:Label({Name = "Text Gradient 1", Alignment = "Left"}):Colorpicker({Name = "Text Gradient 1", Flag = "Text Gradient 1", Default = FromRGB(0, 234, 255)})
+            gs:Label({Name = "Text Gradient 2", Alignment = "Left"}):Colorpicker({Name = "Text Gradient 2", Flag = "Text Gradient 2", Default = FromRGB(255, 47, 185)})
+        end
+
+        return Page
     end
 
     Library.Pages.SubPage = function(self, Data)
