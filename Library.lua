@@ -236,6 +236,7 @@ local Library do
         Sections = { },
         Connections = { },
         Threads = { },
+        FadeStates = { },
         ThemeMap = { },
         ThemeItems = { },
 
@@ -683,14 +684,14 @@ local Library do
     end
 
     Library.GetTransparencyPropertyFromItem = function(self, Item)
-        if Item:IsA("Frame") then
+        if Item:IsA("ScrollingFrame") then
+            return { "BackgroundTransparency", "ScrollBarImageTransparency" }
+        elseif Item:IsA("Frame") then
             return { "BackgroundTransparency" }
         elseif Item:IsA("TextLabel") or Item:IsA("TextButton") then
             return { "TextTransparency", "BackgroundTransparency" }
         elseif Item:IsA("ImageLabel") or Item:IsA("ImageButton") then
             return { "BackgroundTransparency", "ImageTransparency" }
-        elseif Item:IsA("ScrollingFrame") then
-            return { "BackgroundTransparency", "ScrollBarImageTransparency" }
         elseif Item:IsA("TextBox") then
             return { "TextTransparency", "BackgroundTransparency" }
         elseif Item:IsA("UIStroke") then 
@@ -714,6 +715,113 @@ local Library do
         end)
 
         return NewTween
+    end
+
+    Library.BuildFadeNat = function(self, Root, Nat)
+        local Seeds = { }
+        local Anc = Root.Parent
+
+        while Anc do
+            local S = self.FadeStates[Anc]
+
+            if S then
+                TableInsert(Seeds, S.Nat)
+            end
+
+            Anc = Anc.Parent
+        end
+
+        local All = Root:GetDescendants()
+        TableInsert(All, Root)
+
+        for Index, Value in All do
+            if Nat[Value] == nil then
+                local ValueIndex = self:GetTransparencyPropertyFromItem(Value)
+
+                if ValueIndex then
+                    local Rec = { }
+
+                    if type(ValueIndex) == "table" then
+                        for _, Property in ValueIndex do
+                            local Seed = nil
+
+                            for _, Sn in Seeds do
+                                local SRec = Sn[Value]
+
+                                if SRec and SRec[Property] ~= nil then
+                                    Seed = SRec[Property]
+                                    break
+                                end
+                            end
+
+                            Rec[Property] = Seed or (Value[Property] or 0)
+                        end
+                    else
+                        local Seed = nil
+
+                        for _, Sn in Seeds do
+                            local SRec = Sn[Value]
+
+                            if SRec and SRec[ValueIndex] ~= nil then
+                                Seed = SRec[ValueIndex]
+                                break
+                            end
+                        end
+
+                        Rec[ValueIndex] = Seed or (Value[ValueIndex] or 0)
+                    end
+
+                    Nat[Value] = Rec
+                end
+            end
+        end
+    end
+
+    Library.FadeTree = function(self, Root, Bool, Dur)
+        local State = self.FadeStates[Root]
+
+        if not State then
+            State = {
+                Nat = { },
+                Proxy = InstanceNew("NumberValue")
+            }
+
+            State.Proxy.Name = "\0"
+            State.Proxy.Value = Bool and 0 or 1
+
+            State.Apply = function()
+                local V = State.Proxy.Value
+
+                for Item, Rec in State.Nat do
+                    for Property, Natural in Rec do
+                        Item[Property] = Natural + (1 - V) * (1 - Natural)
+                    end
+                end
+            end
+
+            self:Connect(State.Proxy:GetPropertyChangedSignal("Value"), State.Apply)
+
+            self.FadeStates[Root] = State
+        end
+
+        if not Bool and State.Proxy.Value >= 1 - 1e-6 then
+            local Fresh = { }
+
+            self:BuildFadeNat(Root, Fresh)
+            State.Nat = Fresh
+        else
+            self:BuildFadeNat(Root, State.Nat)
+        end
+
+        State.Apply()
+
+        if State.Twn and State.Twn.Tween then
+            State.Twn.Tween:Cancel()
+        end
+
+        State.Twn = Tween:Create(State.Proxy, TweenInfo.new(Dur, self.Tween.Style, self.Tween.Direction), {Value = Bool and 1 or 0}, true)
+
+        return State.Twn
     end
 
     Library.Goto = function(self, own, pre, obj)
@@ -2324,7 +2432,7 @@ local Library do
         }
 
         local Items = { } do 
-            Items["MainFrame"] = Instances:Create("CanvasGroup", {
+            Items["MainFrame"] = Instances:Create("Frame", {
                 Parent = Library.Holder.Instance,
                 AnchorPoint = Vector2New(0, 0),
                 Name = "\0",
@@ -2332,8 +2440,7 @@ local Library do
                 BorderColor3 = FromRGB(10, 10, 10),
                 Size = Window.Size,
                 BorderSizePixel = 2,
-                BackgroundColor3 = FromRGB(15, 15, 20),
-                GroupTransparency = 0
+                BackgroundColor3 = FromRGB(15, 15, 20)
             })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background", BorderColor3 = "Border"})
 
             Items["MainFrame"].Instance.Position = UDim2New(0, Camera.ViewportSize.X / 4, 0, Camera.ViewportSize.Y / 4)
@@ -2474,16 +2581,11 @@ local Library do
 
             if Bool then 
                 mf.Visible = true
-                mf.GroupTransparency = 1
-            end
-
-            if Window.Twn and Window.Twn.Tween then
-                Window.Twn.Tween:Cancel()
             end
 
             local dur = Library.MenuSpeed or Window.FadeSpeed or 0.25
 
-            Window.Twn = Tween:Create(mf, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = Bool and 0 or 1}, true)
+            Window.Twn = Library:FadeTree(mf, Bool, dur)
 
             task.delay(dur + 0.05, function()
                 if Window.IsOpen ~= Bool then
@@ -2494,7 +2596,6 @@ local Library do
 
                 if not Bool then
                     mf.Visible = false
-                    mf.GroupTransparency = 0
                 end
             end)
         end
@@ -2615,7 +2716,7 @@ local Library do
                 Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(108, 108, 108))}
             })            
 
-            Items["Page"] = Instances:Create("CanvasGroup", {
+            Items["Page"] = Instances:Create("Frame", {
                 Parent = Page.Window.Elements["Content"].Instance,
                 BackgroundTransparency = 1,
                 Name = "\0",
@@ -2726,21 +2827,16 @@ local Library do
             local grp = Items["Page"].Instance
             local dur = Library.Tween.Time or Page.Window.FadeSpeed or 0.25
 
-            if Page.Twn and Page.Twn.Tween then
-                Page.Twn.Tween:Cancel()
-            end
-
             if Bool then
                 grp.Visible = true
-                grp.GroupTransparency = 1
-                Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-            else
-                Page.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+            end
 
+            Page.Twn = Library:FadeTree(grp, Bool, dur)
+
+            if not Bool then
                 task.delay(dur + 0.05, function()
                     if not Page.Active then
                         grp.Visible = false
-                        grp.GroupTransparency = 0
                     end
                 end)
             end
@@ -2874,7 +2970,7 @@ local Library do
                 Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(138, 138, 138))}
             }) 
 
-            Items["Subtab"] = Instances:Create("CanvasGroup", {
+            Items["Subtab"] = Instances:Create("Frame", {
                 Parent = SubPage.Page.Elements["Columns"].Instance,
                 BackgroundTransparency = 1,
                 Visible = false,
@@ -2969,21 +3065,16 @@ local Library do
             local grp = Items["Subtab"].Instance
             local dur = Library.Tween.Time or SubPage.Window.FadeSpeed or 0.25
 
-            if SubPage.Twn and SubPage.Twn.Tween then
-                SubPage.Twn.Tween:Cancel()
-            end
-
             if Bool then
                 grp.Visible = true
-                grp.GroupTransparency = 1
-                SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-            else
-                SubPage.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+            end
 
+            SubPage.Twn = Library:FadeTree(grp, Bool, dur)
+
+            if not Bool then
                 task.delay(dur + 0.05, function()
                     if not SubPage.Active then
                         grp.Visible = false
-                        grp.GroupTransparency = 0
                     end
                 end)
             end
@@ -3286,7 +3377,7 @@ local Library do
                     Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(108, 108, 108))}
                 }) 
 
-                SubItems["Content"] = Instances:Create("CanvasGroup", {
+                SubItems["Content"] = Instances:Create("Frame", {
                     Parent = Items["Content"].Instance,
                     BackgroundTransparency = 1,
                     Name = "\0",
@@ -3324,21 +3415,16 @@ local Library do
                 local grp = SubItems["Content"].Instance
                 local dur = Library.Tween.Time or MultiSection.Window.FadeSpeed or 0.25
 
-                if NewSection.Twn and NewSection.Twn.Tween then
-                    NewSection.Twn.Tween:Cancel()
-                end
-
                 if Bool then
                     grp.Visible = true
-                    grp.GroupTransparency = 1
-                    NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 0}, true)
-                else
-                    NewSection.Twn = Tween:Create(grp, TweenInfo.new(dur, Library.Tween.Style, Library.Tween.Direction), {GroupTransparency = 1}, true)
+                end
 
+                NewSection.Twn = Library:FadeTree(grp, Bool, dur)
+
+                if not Bool then
                     task.delay(dur + 0.05, function()
                         if not NewSection.Active then
                             grp.Visible = false
-                            grp.GroupTransparency = 0
                         end
                     end)
                 end
