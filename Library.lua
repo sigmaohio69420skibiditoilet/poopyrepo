@@ -718,19 +718,6 @@ local Library do
     end
 
     Library.BuildFadeNat = function(self, Root, Nat)
-        local Seeds = { }
-        local Anc = Root.Parent
-
-        while Anc do
-            local S = self.FadeStates[Anc]
-
-            if S then
-                TableInsert(Seeds, S.Nat)
-            end
-
-            Anc = Anc.Parent
-        end
-
         local All = Root:GetDescendants()
         TableInsert(All, Root)
 
@@ -741,38 +728,46 @@ local Library do
                 if ValueIndex then
                     local Rec = { }
 
-                    if type(ValueIndex) == "table" then
-                        for _, Property in ValueIndex do
-                            local Seed = nil
+                    local function Resolve(Property)
+                        local Seed = nil
+                        local Anc = Value.Parent
 
-                            for _, Sn in Seeds do
-                                local SRec = Sn[Value]
+                        while Anc do
+                            if Anc ~= Root then
+                                local S = self.FadeStates[Anc]
 
-                                if SRec and SRec[Property] ~= nil then
-                                    Seed = SRec[Property]
+                                if S and S.Nat[Value] and S.Nat[Value][Property] ~= nil then
+                                    Seed = S.Nat[Value][Property]
                                     break
                                 end
                             end
 
-                            Rec[Property] = Seed or (Value[Property] or 0)
+                            Anc = Anc.Parent
+                        end
+
+                        return Seed or (Value[Property] or 0)
+                    end
+
+                    if type(ValueIndex) == "table" then
+                        for _, Property in ValueIndex do
+                            Rec[Property] = Resolve(Property)
                         end
                     else
-                        local Seed = nil
-
-                        for _, Sn in Seeds do
-                            local SRec = Sn[Value]
-
-                            if SRec and SRec[ValueIndex] ~= nil then
-                                Seed = SRec[ValueIndex]
-                                break
-                            end
-                        end
-
-                        Rec[ValueIndex] = Seed or (Value[ValueIndex] or 0)
+                        Rec[ValueIndex] = Resolve(ValueIndex)
                     end
 
                     Nat[Value] = Rec
                 end
+            end
+        end
+    end
+
+    Library.UpdateFadeNat = function(self, Item, Property, Value)
+        for Root, State in self.FadeStates do
+            local Rec = State.Nat[Item]
+
+            if Rec and Rec[Property] ~= nil then
+                Rec[Property] = Value
             end
         end
     end
@@ -2566,16 +2561,8 @@ local Library do
             }):AddToTheme({Color = "Outline"})
         end
 
-        local Debounce = false
-
         function Window:SetOpen(Bool)
-            if Debounce then 
-                return 
-            end
-
             Window.IsOpen = Bool
-
-            Debounce = true 
 
             local mf = Items["MainFrame"].Instance
 
@@ -2591,8 +2578,6 @@ local Library do
                 if Window.IsOpen ~= Bool then
                     return
                 end
-
-                Debounce = false
 
                 if not Bool then
                     mf.Visible = false
@@ -2809,11 +2794,15 @@ local Library do
                 Items["Text"].Instance.TextTransparency = 0
                 Items["Hide"].Instance.Visible = true
 
+                Library:UpdateFadeNat(Items["Text"].Instance, "TextTransparency", 0)
+
                 Items["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
             else
                 Items["Text"].Instance.TextColor3 = Library.Theme.Text
                 Items["Text"].Instance.TextTransparency = 0.5
                 Items["Hide"].Instance.Visible = false
+
+                Library:UpdateFadeNat(Items["Text"].Instance, "TextTransparency", 0.5)
 
                 Items["Text"]:ChangeItemTheme({TextColor3 = "Text"})
             end
@@ -3038,23 +3027,26 @@ local Library do
         end
 
         function SubPage:Btn(Bool)
-            if Bool then
-                Items["Icon"].Instance.ImageColor3 = Library.Theme.Accent
-                Items["Icon"].Instance.ImageTransparency = 0
-                Items["Hide"].Instance.Visible = true
+            local Icon = Items["Icon"].Instance
+            local Transparency = Bool and 0 or 0.35
+            local Color = Bool and Library.Theme.Accent or Library.Theme.Text
 
-                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Accent"})
+            Library:UpdateFadeNat(Icon, "ImageTransparency", Transparency)
 
-                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, 1)
-            else
-                Items["Icon"].Instance.ImageColor3 = Library.Theme.Text
-                Items["Icon"].Instance.ImageTransparency = 0.35
-                Items["Hide"].Instance.Visible = false
-
-                Items["Icon"]:ChangeItemTheme({ImageColor3 = "Text"})
-
-                Items["Inactive"].Instance.Size = UDim2New(1, 0, 1, -2)
+            if SubPage.IcoTween then
+                SubPage.IcoTween.Tween:Cancel()
             end
+
+            SubPage.IcoTween = Tween:Create(Items["Icon"], TweenInfo.new(math.min(Library.Tween.Time or 0.15, 0.15), Library.Tween.Style, Library.Tween.Direction), {
+                ImageTransparency = Transparency,
+                ImageColor3 = Color
+            })
+
+            Items["Hide"].Instance.Visible = Bool
+
+            Items["Icon"]:ChangeItemTheme({ImageColor3 = Bool and "Accent" or "Text"})
+
+            Items["Inactive"].Instance.Size = Bool and UDim2New(1, 0, 1, 1) or UDim2New(1, 0, 1, -2)
         end
 
         function SubPage:Turn(Bool)
@@ -3399,10 +3391,16 @@ local Library do
                 if Bool then
                     SubItems["Text"].Instance.TextColor3 = Library.Theme.Accent
                     SubItems["Text"].Instance.TextTransparency = 0
+
+                    Library:UpdateFadeNat(SubItems["Text"].Instance, "TextTransparency", 0)
+
                     SubItems["Text"]:ChangeItemTheme({TextColor3 = "Accent"})
                 else
                     SubItems["Text"].Instance.TextColor3 = Library.Theme.Text
                     SubItems["Text"].Instance.TextTransparency = 0.5
+
+                    Library:UpdateFadeNat(SubItems["Text"].Instance, "TextTransparency", 0.5)
+
                     SubItems["Text"]:ChangeItemTheme({TextColor3 = "Text"})
                 end
             end
@@ -3738,11 +3736,15 @@ local Library do
 
                 Items["Indicator"]:Tween(nil, {BackgroundColor3 = Library.Theme.Accent})
                 Items["Text"]:Tween(nil, {TextTransparency = 0})
+
+                Library:UpdateFadeNat(Items["Text"].Instance, "TextTransparency", 0)
             else
                 Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = "Element"})
 
                 Items["Indicator"]:Tween(nil, {BackgroundColor3 = Library.Theme.Element})
                 Items["Text"]:Tween(nil, {TextTransparency = 0.48})
+
+                Library:UpdateFadeNat(Items["Text"].Instance, "TextTransparency", 0.48)
             end
 
             if Toggle.Callback then 
@@ -4402,9 +4404,13 @@ local Library do
                 if State == "Active" then 
                     OptionData.Text:ChangeItemTheme({TextColor3 = "Accent"})
                     OptionData.Text:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
+
+                    Library:UpdateFadeNat(OptionData.Text.Instance, "TextTransparency", 0)
                 else
                     OptionData.Text:ChangeItemTheme({TextColor3 = "Text"})
                     OptionData.Text:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.48})
+
+                    Library:UpdateFadeNat(OptionData.Text.Instance, "TextTransparency", 0.48)
                 end
             end
 
@@ -5000,9 +5006,13 @@ local Library do
                 if State == "Active" then 
                     OptionData.Text:ChangeItemTheme({TextColor3 = "Accent"})
                     OptionData.Text:Tween(nil, {TextColor3 = Library.Theme.Accent, TextTransparency = 0})
+
+                    Library:UpdateFadeNat(OptionData.Text.Instance, "TextTransparency", 0)
                 else
                     OptionData.Text:ChangeItemTheme({TextColor3 = "Text"})
                     OptionData.Text:Tween(nil, {TextColor3 = Library.Theme.Text, TextTransparency = 0.48})
+
+                    Library:UpdateFadeNat(OptionData.Text.Instance, "TextTransparency", 0.48)
                 end
             end
 
